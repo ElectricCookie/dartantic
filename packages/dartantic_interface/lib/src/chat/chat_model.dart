@@ -22,7 +22,7 @@ abstract class ChatModel<TOptions extends ChatModelOptions> {
   final String name;
 
   /// The tools the model may call.
-  final List<Tool>? tools;
+  List<Tool>? tools;
 
   /// The temperature for the model.
   final double? temperature;

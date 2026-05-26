@@ -171,4 +171,14 @@ class StreamingState {
   /// Validates that a tool result ID matches a registered tool call
   bool validateToolResultId(String id) =>
       toolIdCoordinator.validateToolResultId(id);
+
+  /// Rebuilds the tool map in-place from the given tool list.
+  ///
+  /// Called by [Agent] before each iteration when tools have changed to keep
+  /// the tool map in sync with the agent's current tool list.
+  void rebuildToolMap(List<Tool> tools) {
+    _toolMap
+      ..clear()
+      ..addEntries(tools.map((t) => MapEntry(t.name, t)));
+  }
 }
