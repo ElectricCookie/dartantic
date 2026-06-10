@@ -83,6 +83,7 @@ class OpenAIChatModel extends ChatModel<OpenAIChatOptions> {
 
     final accumulatedToolCalls = <StreamingToolCall>[];
     final accumulatedTextBuffer = StringBuffer();
+    final reasoningBuffer = StringBuffer();
     var chunkCount = 0;
     var lastResult = ChatResult<ChatMessage>(
       output: const ChatMessage(role: ChatMessageRole.model, parts: []),
@@ -118,6 +119,31 @@ class OpenAIChatModel extends ChatModel<OpenAIChatOptions> {
         }
 
         if (delta == null) continue;
+
+        final reasoningText = reasoningTextFromOpenAIStreamDelta(delta);
+        if (reasoningText != null) {
+          final thinkingDelta = appendOpenAIStreamReasoning(
+            reasoningBuffer,
+            reasoningText,
+          );
+          if (thinkingDelta.isNotEmpty) {
+            yield ChatResult<ChatMessage>(
+              id: completion.id ?? lastResult.id,
+              output: const ChatMessage(role: ChatMessageRole.model, parts: []),
+              messages: const [],
+              finishReason: mapFinishReason(
+                completion.choices?.firstOrNull?.finishReason,
+              ),
+              metadata: {
+                'created': completion.created,
+                'model': completion.model,
+                'system_fingerprint': completion.systemFingerprint,
+              },
+              thinking: thinkingDelta,
+              usage: mapUsage(completion.usage),
+            );
+          }
+        }
 
         // Get the message with any text content (tool calls are only
         // accumulated)
@@ -158,16 +184,16 @@ class OpenAIChatModel extends ChatModel<OpenAIChatOptions> {
 
       // After streaming completes, yield final result with usage
       if (accumulatedToolCalls.isNotEmpty) {
-        // Yield final message with tools
-        final completeMessage = createCompleteMessageWithTools(
+        // Text was already streamed via per-chunk deltas. Only attach tool
+        // parts here so the orchestrator does not re-emit the full text.
+        final toolsOnlyMessage = createCompleteMessageWithTools(
           accumulatedToolCalls,
-          accumulatedText: accumulatedTextBuffer.toString(),
         );
 
         yield ChatResult<ChatMessage>(
           id: lastResult.id,
-          output: completeMessage,
-          messages: [completeMessage],
+          output: const ChatMessage(role: ChatMessageRole.model, parts: []),
+          messages: [toolsOnlyMessage],
           finishReason: lastResult.finishReason,
           metadata: lastResult.metadata,
           usage: lastResult.usage,

@@ -101,6 +101,38 @@ CreateChatCompletionRequest createChatCompletionRequest(
   topLogprobs: options?.topLogprobs ?? defaultOptions.topLogprobs,
 );
 
+/// Raw reasoning text from an OpenAI-compat stream delta (OpenRouter, DeepSeek, etc.).
+String? reasoningTextFromOpenAIStreamDelta(
+  ChatCompletionStreamResponseDelta delta,
+) {
+  final reasoningContent = delta.reasoningContent?.trim();
+  if (reasoningContent != null && reasoningContent.isNotEmpty) {
+    return delta.reasoningContent;
+  }
+  final reasoning = delta.reasoning?.trim();
+  if (reasoning != null && reasoning.isNotEmpty) {
+    return delta.reasoning;
+  }
+  return null;
+}
+
+/// Appends [text] to [buffer], returning only the new suffix (dedupes cumulative deltas).
+String appendOpenAIStreamReasoning(StringBuffer buffer, String text) {
+  if (text.isEmpty) return '';
+  final existing = buffer.toString();
+
+  var toAppend = text;
+  if (existing.isNotEmpty && text.startsWith(existing)) {
+    toAppend = text.substring(existing.length);
+  } else if (existing.startsWith(text)) {
+    return '';
+  }
+  if (toAppend.isEmpty) return '';
+
+  buffer.write(toAppend);
+  return toAppend;
+}
+
 /// Helper class to track streaming tool call state
 class StreamingToolCall {
   /// Creates a new streaming tool call.
