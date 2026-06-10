@@ -57,6 +57,14 @@ void main() {
         expect(agent.model, contains('ollama'));
       });
 
+      test('addTool ignores duplicate tool names', () {
+        final agent = Agent('ollama:llama2');
+        agent.addTool(weatherTool);
+        agent.addTool(weatherTool);
+        agent.removeTool('get_weather');
+        expect(agent.model, contains('ollama'));
+      });
+
       test('removeTool removes tool from agent', () async {
         final agent = Agent('ollama:llama2');
         agent.addTool(weatherTool);

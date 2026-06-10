@@ -44,10 +44,7 @@ class Agent {
   /// - [temperature]: Model temperature (0.0 to 1.0)
   /// - [enableThinking]: Enable extended thinking/reasoning (default: false)
   /// - [middleware]: List of middleware to intercept tool calls
-<<<<<<< HEAD
-=======
   /// - [toolSource]: Optional source for progressive tool discovery
->>>>>>> feature/issue-114-progressive-tool-discovery
   /// - [chatModelOptions]: Provider-specific chat model configuration
   /// - [embeddingsModelOptions]: Provider-specific embeddings configuration
   /// - [mediaModelOptions]: Provider-specific media generation configuration
@@ -58,10 +55,7 @@ class Agent {
     bool enableThinking = false,
     String? displayName,
     List<ToolMiddleware>? middleware,
-<<<<<<< HEAD
-=======
     ProgressiveToolSource? toolSource,
->>>>>>> feature/issue-114-progressive-tool-discovery
     this.chatModelOptions,
     this.embeddingsModelOptions,
     this.mediaModelOptions,
@@ -98,11 +92,8 @@ class Agent {
     _temperature = temperature;
     _enableThinking = enableThinking;
     _middleware = middleware;
-<<<<<<< HEAD
-=======
     _toolSource = toolSource;
     _registerDiscoveryToolsIfNeeded();
->>>>>>> feature/issue-114-progressive-tool-discovery
 
     _logger.fine(
       'Agent created successfully with ${tools?.length ?? 0} tools, '
@@ -122,13 +113,10 @@ class Agent {
     bool enableThinking = false,
     String? displayName,
     List<ToolMiddleware>? middleware,
-<<<<<<< HEAD
-=======
     ProgressiveToolSource? toolSource,
->>>>>>> feature/issue-114-progressive-tool-discovery
-    this.chatModelOptions,
     this.embeddingsModelOptions,
     this.mediaModelOptions,
+    this.chatModelOptions,
   }) {
     _checkLoggingEnvironment();
 
@@ -153,11 +141,9 @@ class Agent {
     _temperature = temperature;
     _enableThinking = enableThinking;
     _middleware = middleware;
-<<<<<<< HEAD
-=======
+
     _toolSource = toolSource;
     _registerDiscoveryToolsIfNeeded();
->>>>>>> feature/issue-114-progressive-tool-discovery
 
     _logger.fine(
       'Agent created from provider with ${tools?.length ?? 0} tools, '
@@ -217,8 +203,13 @@ class Agent {
   /// Adds a tool to the agent's toolset.
   ///
   /// The tool will be available in the next streaming iteration.
+  /// If a tool with the same [Tool.name] is already registered, this is a no-op.
   void addTool(Tool tool) {
-    (_tools ??= []).add(tool);
+    _tools ??= [];
+    if (_tools!.any((existing) => existing.name == tool.name)) {
+      return;
+    }
+    _tools!.add(tool);
     _toolsVersion++;
   }
 
@@ -240,71 +231,83 @@ class Agent {
     final source = _toolSource;
     if (source == null) return;
 
-    addTool(Tool<Map<String, dynamic>>(
-      name: 'searchTools',
-      description:
-          'Search for available tools by query string. Returns a list of tool '
-          'names and descriptions.',
-      inputSchema: JsonSchema.create({
-        'type': 'object',
-        'properties': {
-          'query': {
-            'type': 'string',
-            'description': 'Search query to find relevant tools',
+    addTool(
+      Tool<Map<String, dynamic>>(
+        name: 'searchTools',
+        description:
+            'Search for available tools by query string. Returns a list of tool '
+            'names and descriptions.',
+        inputSchema: JsonSchema.create({
+          'type': 'object',
+          'properties': {
+            'query': {
+              'type': 'string',
+              'description': 'Search query to find relevant tools',
+            },
           },
+          'required': ['query'],
+        }),
+        onCall: (args) async {
+          final results = await source.searchTools(args['query'] as String);
+          return results
+              .map((d) => {'name': d.name, 'description': d.description})
+              .toList();
         },
-        'required': ['query'],
-      }),
-      onCall: (args) async {
-        final results = await source.searchTools(args['query'] as String);
-        return results
-            .map((d) => {'name': d.name, 'description': d.description})
-            .toList();
-      },
-    ));
+      ),
+    );
 
-    addTool(Tool<Map<String, dynamic>>(
-      name: 'getToolDetail',
-      description:
-          'Get the full input schema details for a specific tool by name.',
-      inputSchema: JsonSchema.create({
-        'type': 'object',
-        'properties': {
-          'name': {
-            'type': 'string',
-            'description': 'The name of the tool to get details for',
+    addTool(
+      Tool<Map<String, dynamic>>(
+        name: 'getToolDetail',
+        description:
+            'Get the full input schema details for a specific tool by name.',
+        inputSchema: JsonSchema.create({
+          'type': 'object',
+          'properties': {
+            'name': {
+              'type': 'string',
+              'description': 'The name of the tool to get details for',
+            },
           },
+          'required': ['name'],
+        }),
+        onCall: (args) async {
+          final tool = await source.getTool(args['name'] as String);
+          return tool.toJson();
         },
-        'required': ['name'],
-      }),
-      onCall: (args) async {
-        final tool = await source.getTool(args['name'] as String);
-        return tool.toJson();
-      },
-    ));
+      ),
+    );
 
-    addTool(Tool<Map<String, dynamic>>(
-      name: 'useTool',
-      description:
-          'Register a tool for direct use. After calling this, the tool can '
-          'be called directly by name in subsequent requests.',
-      inputSchema: JsonSchema.create({
-        'type': 'object',
-        'properties': {
-          'name': {
-            'type': 'string',
-            'description': 'The name of the tool to register for direct use',
+    addTool(
+      Tool<Map<String, dynamic>>(
+        name: 'useTool',
+        description:
+            'Register a tool for direct use. After calling this, the tool can '
+            'be called directly by name in subsequent requests.',
+        inputSchema: JsonSchema.create({
+          'type': 'object',
+          'properties': {
+            'name': {
+              'type': 'string',
+              'description': 'The name of the tool to register for direct use',
+            },
           },
+          'required': ['name'],
+        }),
+        onCall: (args) async {
+          final name = args['name'] as String;
+          final tool = await source.getTool(name);
+          final alreadyRegistered =
+              _tools?.any((existing) => existing.name == tool.name) ?? false;
+          if (!alreadyRegistered) {
+            addTool(tool);
+          }
+          return alreadyRegistered
+              ? 'Tool "$name" is already registered.'
+              : 'Tool "$name" has been registered. You can now call it directly.';
         },
-        'required': ['name'],
-      }),
-      onCall: (args) async {
-        final name = args['name'] as String;
-        final tool = await source.getTool(name);
-        addTool(tool);
-        return 'Tool "$name" has been registered. You can now call it directly.';
-      },
-    ));
+      ),
+    );
   }
 
   late final String _providerName;
@@ -317,11 +320,8 @@ class Agent {
   late final bool _enableThinking;
   late final String? _displayName;
   late final List<ToolMiddleware>? _middleware;
-<<<<<<< HEAD
-=======
   int _toolsVersion = 0;
   ProgressiveToolSource? _toolSource;
->>>>>>> feature/issue-114-progressive-tool-discovery
 
   static final Logger _logger = Logger('dartantic.chat_agent');
 
@@ -460,7 +460,7 @@ class Agent {
 
       try {
         // Main streaming loop
-        int lastToolsVersion = _toolsVersion;
+        var lastToolsVersion = _toolsVersion;
         while (!state.done) {
           // Sync tools with model and state if they changed since last
           // iteration
