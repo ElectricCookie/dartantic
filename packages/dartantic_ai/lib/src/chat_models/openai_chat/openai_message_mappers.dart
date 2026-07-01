@@ -297,11 +297,16 @@ ChatMessage createCompleteMessageWithTools(
 
     // Parse the complete JSON arguments
     if (rawArgs.isNotEmpty) {
-      final decoded = json.decode(rawArgs);
-      if (decoded is Map<String, dynamic>) {
-        arguments = decoded;
-      } else if (decoded == null || decoded == 'null') {
-        // Handle null case
+      try {
+        final decoded = json.decode(rawArgs);
+        if (decoded is Map<String, dynamic>) {
+          arguments = decoded;
+        } else if (decoded == null || decoded == 'null') {
+          // Handle null case
+          arguments = <String, dynamic>{};
+        }
+      } on FormatException {
+        // Truncated/incomplete JSON from streaming — treat as empty args
         arguments = <String, dynamic>{};
       }
     }
@@ -342,12 +347,17 @@ ChatMessage messageFromOpenAIResponse(CreateChatCompletionResponse response) {
 
       // Parse arguments, handling empty arguments case for streaming
       if (rawArgs.isNotEmpty) {
-        final decoded = json.decode(rawArgs);
-        if (decoded is Map<String, dynamic>) {
-          arguments = decoded;
-        } else if (decoded == null || decoded == 'null') {
-          // Handle cases where decoded is null (e.g., Cohere sends "null" for
-          // no params)
+        try {
+          final decoded = json.decode(rawArgs);
+          if (decoded is Map<String, dynamic>) {
+            arguments = decoded;
+          } else if (decoded == null || decoded == 'null') {
+            // Handle cases where decoded is null (e.g., Cohere sends "null" for
+            // no params)
+            arguments = <String, dynamic>{};
+          }
+        } on FormatException {
+          // Truncated/incomplete JSON from streaming — treat as empty args
           arguments = <String, dynamic>{};
         }
       }
