@@ -173,7 +173,7 @@ class ToolExecutor {
           name: toolCall.name,
           result: formatError(error),
         ),
-        error: error,
+        error: error is Exception ? error : Exception(error.toString()),
         stackTrace: stackTrace,
       );
     }
@@ -188,6 +188,6 @@ class ToolExecutor {
   }
 
   /// Formats an error for inclusion in the conversation.
-  String formatError(Exception error) =>
+  String formatError(Object error) =>
       json.encode({'error': error.toString()});
 }
