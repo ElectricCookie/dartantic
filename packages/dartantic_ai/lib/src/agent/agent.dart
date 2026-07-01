@@ -272,7 +272,13 @@ class Agent {
           'required': ['name'],
         }),
         onCall: (args) async {
-          final tool = await source.getTool(args['name'] as String);
+          final name = args['name'];
+          if (name is! String || name.isEmpty) {
+            return {
+              'error': 'Missing or empty "name" argument. Provide the tool name to get details for.',
+            };
+          }
+          final tool = await source.getTool(name);
           return tool.toJson();
         },
       ),
@@ -295,7 +301,12 @@ class Agent {
           'required': ['name'],
         }),
         onCall: (args) async {
-          final name = args['name'] as String;
+          final name = args['name'];
+          if (name is! String || name.isEmpty) {
+            return {
+              'error': 'Missing or empty "name" argument. Provide the tool name to register.',
+            };
+          }
           final tool = await source.getTool(name);
           final alreadyRegistered =
               _tools?.any((existing) => existing.name == tool.name) ?? false;

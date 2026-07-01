@@ -158,7 +158,7 @@ class ToolExecutor {
           result: resultString,
         ),
       );
-    } on Exception catch (error, stackTrace) {
+    } catch (error, stackTrace) {
       // Must catch this exception to pass the error along to the LLM
       _logger.warning(
         'Tool ${toolCall.name} execution failed: $error',
