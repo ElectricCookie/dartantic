@@ -6,6 +6,7 @@ import 'package:openai_dart/openai_dart.dart';
 
 import '../helpers/message_part_helpers.dart';
 import '../helpers/tool_id_helpers.dart';
+import 'openai_audio_format.dart';
 import 'openai_chat_options.dart';
 import 'openai_message_mappers_helpers.dart';
 
@@ -150,8 +151,30 @@ extension MessageListToOpenAI on List<ChatMessage> {
                 ),
               ),
             );
+          } else if (mimeType.startsWith('audio/')) {
+            // OpenRouter / OpenAI chat completions expect input_audio parts.
+            // openai_dart only types wav|mp3; other formats are rewritten on
+            // the wire via [OpenAiAudioFormatOverrides].
+            final base64Data = base64.encode(bytes);
+            final format = openAiAudioFormatForMime(mimeType);
+            final typedFormat = switch (format) {
+              'wav' => ChatCompletionMessageInputAudioFormat.wav,
+              'mp3' => ChatCompletionMessageInputAudioFormat.mp3,
+              _ => ChatCompletionMessageInputAudioFormat.mp3,
+            };
+            if (format != 'wav' && format != 'mp3') {
+              OpenAiAudioFormatOverrides.register(base64Data, format);
+            }
+            contentParts.add(
+              ChatCompletionMessageContentPart.audio(
+                inputAudio: ChatCompletionMessageInputAudio(
+                  data: base64Data,
+                  format: typedFormat,
+                ),
+              ),
+            );
           } else {
-            // Non-images: Use dartantic_ai text format
+            // Non-images/audio: Use dartantic_ai text format
             // This allows any MIME type to work with OpenAI
             final base64Data = base64.encode(bytes);
             contentParts.add(

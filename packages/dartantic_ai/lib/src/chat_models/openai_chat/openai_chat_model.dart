@@ -5,6 +5,7 @@ import 'package:logging/logging.dart';
 import 'package:openai_dart/openai_dart.dart';
 
 import '../../retry_http_client.dart';
+import 'openai_audio_format.dart';
 import 'openai_chat_options.dart';
 import 'openai_message_mappers.dart';
 import 'openai_message_mappers_helpers.dart';
@@ -30,9 +31,11 @@ class OpenAIChatModel extends ChatModel<OpenAIChatOptions> {
          baseUrl: baseUrl?.toString(),
          headers: headers,
          queryParams: queryParams,
-         client: client != null
-             ? RetryHttpClient(inner: client)
-             : RetryHttpClient(inner: http.Client()),
+         client: OpenAiAudioFormatRewriteClient(
+           client != null
+               ? RetryHttpClient(inner: client)
+               : RetryHttpClient(inner: http.Client()),
+         ),
        ),
        _isTogetherAI =
            baseUrl?.toString().toLowerCase().contains('together.xyz') ?? false,
