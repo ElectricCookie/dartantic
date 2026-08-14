@@ -221,12 +221,16 @@ class Agent {
     _toolsVersion++;
   }
 
+  /// Currently registered tools, including discovery tools when a toolSource
+  /// is set.
+  List<Tool> get tools => List.unmodifiable(_tools ?? const []);
+
   // -------------------------------------------------------------------------
   // Progressive Tool Discovery
   // -------------------------------------------------------------------------
 
-  /// Registers the three built-in discovery tools when a [toolSource] is
-  /// provided: searchTools, getToolDetail, and useTool.
+  /// Registers built-in discovery tools when a [toolSource] is provided:
+  /// `searchTools` and `useTool`.
   void _registerDiscoveryToolsIfNeeded() {
     final source = _toolSource;
     if (source == null) return;
@@ -235,8 +239,10 @@ class Agent {
       Tool<Map<String, dynamic>>(
         name: 'searchTools',
         description:
-            'Search for available tools by query string. Returns a list of tool '
-            'names and descriptions.',
+            'Search for available tools by query string. Returns a list of '
+            'tool names and short descriptions. After finding tools, register '
+            'them with useTool (pass multiple names in one call when '
+            'possible).',
         inputSchema: JsonSchema.create({
           'type': 'object',
           'properties': {
@@ -258,67 +264,90 @@ class Agent {
 
     addTool(
       Tool<Map<String, dynamic>>(
-        name: 'getToolDetail',
-        description:
-            'Get the full input schema details for a specific tool by name.',
-        inputSchema: JsonSchema.create({
-          'type': 'object',
-          'properties': {
-            'name': {
-              'type': 'string',
-              'description': 'The name of the tool to get details for',
-            },
-          },
-          'required': ['name'],
-        }),
-        onCall: (args) async {
-          final name = args['name'];
-          if (name is! String || name.isEmpty) {
-            return {
-              'error': 'Missing or empty "name" argument. Provide the tool name to get details for.',
-            };
-          }
-          final tool = await source.getTool(name);
-          return tool.toJson();
-        },
-      ),
-    );
-
-    addTool(
-      Tool<Map<String, dynamic>>(
         name: 'useTool',
         description:
-            'Register a tool for direct use. After calling this, the tool can '
-            'be called directly by name in subsequent requests.',
+            'Register one or more tools for direct use and return their full '
+            'schemas (name, description, inputSchema). After calling this, '
+            'each registered tool can be called directly by name. Prefer '
+            'registering multiple tools in a single call when you already '
+            'know which ones you need.',
         inputSchema: JsonSchema.create({
           'type': 'object',
           'properties': {
-            'name': {
-              'type': 'string',
-              'description': 'The name of the tool to register for direct use',
+            'names': {
+              'type': 'array',
+              'items': {'type': 'string'},
+              'minItems': 1,
+              'description':
+                  'Tool name(s) to register (from searchTools). Prefer '
+                  'batching multiple names in one call.',
             },
           },
-          'required': ['name'],
+          'required': ['names'],
         }),
-        onCall: (args) async {
-          final name = args['name'];
-          if (name is! String || name.isEmpty) {
-            return {
-              'error': 'Missing or empty "name" argument. Provide the tool name to register.',
-            };
-          }
-          final tool = await source.getTool(name);
-          final alreadyRegistered =
-              _tools?.any((existing) => existing.name == tool.name) ?? false;
-          if (!alreadyRegistered) {
-            addTool(tool);
-          }
-          return alreadyRegistered
-              ? 'Tool "$name" is already registered.'
-              : 'Tool "$name" has been registered. You can now call it directly.';
-        },
+        onCall: (args) => _useTools(source, args),
       ),
     );
+  }
+
+  Future<Map<String, dynamic>> _useTools(
+    ProgressiveToolSource source,
+    Map<String, dynamic> args,
+  ) async {
+    final names = _parseUseToolNames(args);
+    if (names == null) {
+      return {
+        'error':
+            'Missing or empty "names" argument. Provide a non-empty array of '
+            'tool names to register.',
+      };
+    }
+
+    final tools = <Map<String, dynamic>>[];
+    final errors = <Map<String, dynamic>>[];
+
+    for (final name in names) {
+      try {
+        final tool = await source.getTool(name);
+        final alreadyRegistered =
+            _tools?.any((existing) => existing.name == tool.name) ?? false;
+        if (!alreadyRegistered) {
+          addTool(tool);
+        }
+        tools.add({
+          ...tool.toJson(),
+          'status': alreadyRegistered ? 'already_registered' : 'registered',
+        });
+      } on Object catch (e) {
+        errors.add({'name': name, 'error': e.toString()});
+      }
+    }
+
+    return {
+      'tools': tools,
+      if (errors.isNotEmpty) 'errors': errors,
+    };
+  }
+
+  /// Parses `names` (preferred) or legacy singular `name` from [args].
+  static List<String>? _parseUseToolNames(Map<String, dynamic> args) {
+    final namesArg = args['names'];
+    if (namesArg is List) {
+      final names = namesArg
+          .whereType<String>()
+          .map((n) => n.trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
+      return names.isEmpty ? null : names;
+    }
+
+    // Back-compat for older prompts/skills that still pass `name`.
+    final nameArg = args['name'];
+    if (nameArg is String && nameArg.trim().isNotEmpty) {
+      return [nameArg.trim()];
+    }
+
+    return null;
   }
 
   late final String _providerName;

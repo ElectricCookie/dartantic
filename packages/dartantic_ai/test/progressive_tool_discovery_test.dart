@@ -7,23 +7,39 @@ import 'test_tools.dart';
 class MockToolSource implements ProgressiveToolSource {
   @override
   Future<List<ProgressiveToolDescriptor>> searchTools(String query) async {
-    if (query.toLowerCase().contains('weather')) {
-      return [
+    final q = query.toLowerCase();
+    final results = <ProgressiveToolDescriptor>[];
+    if (q.contains('weather')) {
+      results.add(
         const ProgressiveToolDescriptor(
           name: 'get_weather',
           description: 'Get the current weather for a city',
         ),
-      ];
+      );
     }
-    return [];
+    if (q.contains('string')) {
+      results.add(
+        const ProgressiveToolDescriptor(
+          name: 'string_tool',
+          description: 'Returns a simple string',
+        ),
+      );
+    }
+    return results;
   }
 
   @override
   Future<Tool> getTool(String name) async {
-    if (name == 'get_weather') return weatherTool;
-    throw Exception('Tool $name not found');
+    return switch (name) {
+      'get_weather' => weatherTool,
+      'string_tool' => stringTool,
+      _ => throw Exception('Tool $name not found'),
+    };
   }
 }
+
+Tool _discoveryTool(Agent agent, String name) =>
+    agent.tools.firstWhere((t) => t.name == name);
 
 void main() {
   group('Progressive Tool Discovery', () {
@@ -43,6 +59,65 @@ void main() {
       test('Agent with toolSource auto-registers discovery tools', () async {
         final agent = Agent('ollama:llama2', toolSource: toolSource);
         expect(agent.model, contains('ollama'));
+        expect(
+          agent.tools.map((t) => t.name),
+          containsAll(['searchTools', 'useTool']),
+        );
+        expect(agent.tools.map((t) => t.name), isNot(contains('getToolDetail')));
+      });
+
+      test('useTool registers tools and returns schemas', () async {
+        final agent = Agent('ollama:llama2', toolSource: toolSource);
+        final useTool = _discoveryTool(agent, 'useTool');
+
+        final result = await useTool.call({
+          'names': ['get_weather', 'string_tool'],
+        }) as Map<String, dynamic>;
+
+        final tools = result['tools'] as List<dynamic>;
+        expect(tools, hasLength(2));
+        expect(tools[0]['name'], 'get_weather');
+        expect(tools[0]['status'], 'registered');
+        expect(tools[0]['inputSchema'], isA<Map>());
+        expect(tools[1]['name'], 'string_tool');
+        expect(tools[1]['status'], 'registered');
+        expect(result.containsKey('errors'), isFalse);
+
+        expect(
+          agent.tools.map((t) => t.name),
+          containsAll(['get_weather', 'string_tool']),
+        );
+      });
+
+      test('useTool accepts legacy singular name', () async {
+        final agent = Agent('ollama:llama2', toolSource: toolSource);
+        final useTool = _discoveryTool(agent, 'useTool');
+
+        final result = await useTool.call({'name': 'get_weather'})
+            as Map<String, dynamic>;
+
+        expect((result['tools'] as List).single['status'], 'registered');
+        expect(agent.tools.map((t) => t.name), contains('get_weather'));
+      });
+
+      test('useTool reports already_registered and missing tools', () async {
+        final agent = Agent('ollama:llama2', toolSource: toolSource);
+        final useTool = _discoveryTool(agent, 'useTool');
+
+        await useTool.call({
+          'names': ['get_weather'],
+        });
+        final result = await useTool.call({
+          'names': ['get_weather', 'missing_tool'],
+        }) as Map<String, dynamic>;
+
+        final tools = result['tools'] as List<dynamic>;
+        expect(tools, hasLength(1));
+        expect(tools.single['status'], 'already_registered');
+
+        final errors = result['errors'] as List<dynamic>;
+        expect(errors, hasLength(1));
+        expect(errors.single['name'], 'missing_tool');
       });
 
       test('multiple addTool calls work correctly', () async {
