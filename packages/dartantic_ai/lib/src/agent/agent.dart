@@ -19,6 +19,7 @@ import 'agent_response_accumulator.dart';
 import 'media_response_accumulator.dart';
 import 'model_string_parser.dart';
 import 'orchestrators/default_streaming_orchestrator.dart';
+import 'run_budget.dart';
 import 'streaming_state.dart';
 import 'tool_middleware.dart';
 
@@ -323,10 +324,7 @@ class Agent {
       }
     }
 
-    return {
-      'tools': tools,
-      if (errors.isNotEmpty) 'errors': errors,
-    };
+    return {'tools': tools, if (errors.isNotEmpty) 'errors': errors};
   }
 
   /// Parses `names` (preferred) or legacy singular `name` from [args].
@@ -447,6 +445,7 @@ class Agent {
     List<ChatMessage> history = const [],
     List<Part> attachments = const [],
     JsonSchema? outputSchema,
+    AgentRunLimits? runLimits,
   }) async* {
     _logger.info(
       'Starting agent stream with prompt and ${history.length} '
@@ -494,6 +493,7 @@ class Agent {
         conversationHistory: conversationHistory,
         toolMap: {for (final tool in toolsToUse ?? <Tool>[]) tool.name: tool},
         middleware: _middleware,
+        runBudget: runLimits != null ? RunBudgetTracker(runLimits) : null,
       );
 
       orchestrator.initialize(state);

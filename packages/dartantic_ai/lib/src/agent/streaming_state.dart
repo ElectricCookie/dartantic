@@ -3,6 +3,7 @@ import 'package:logging/logging.dart';
 
 import '../chat_models/helpers/tool_id_helpers.dart';
 import 'message_accumulator.dart';
+import 'run_budget.dart';
 import 'tool_executor.dart';
 import 'tool_middleware.dart';
 
@@ -13,8 +14,10 @@ class StreamingState {
     required List<ChatMessage> conversationHistory,
     required Map<String, Tool> toolMap,
     List<ToolMiddleware>? middleware,
+    RunBudgetTracker? runBudget,
   }) : _conversationHistory = conversationHistory,
        _toolMap = toolMap,
+       runBudget = runBudget,
        executor = ToolExecutor(middleware: middleware);
 
   /// Logger for state.streaming operations.
@@ -38,6 +41,9 @@ class StreamingState {
 
   /// Tool executor for provider-specific tool execution
   final ToolExecutor executor;
+
+  /// Optional per-run budget tracker (active time, tool rounds, iterations).
+  final RunBudgetTracker? runBudget;
 
   /// Coordinator for managing tool IDs across the conversation
   final ToolIdCoordinator toolIdCoordinator = ToolIdCoordinator();

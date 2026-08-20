@@ -99,7 +99,30 @@ CreateChatCompletionRequest createChatCompletionRequest(
   presencePenalty: options?.presencePenalty ?? defaultOptions.presencePenalty,
   seed: options?.seed ?? defaultOptions.seed,
   topLogprobs: options?.topLogprobs ?? defaultOptions.topLogprobs,
+  reasoning: _createReasoningConfig(
+    options?.reasoningEffort ?? defaultOptions.reasoningEffort,
+  ),
 );
+
+CreateChatCompletionRequestReasoning? _createReasoningConfig(String? effort) {
+  final normalized = effort?.trim().toLowerCase();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  if (normalized == 'none') {
+    return const CreateChatCompletionRequestReasoning(exclude: true);
+  }
+  final mapped = switch (normalized) {
+    'low' => CreateChatCompletionRequestReasoningEffort.low,
+    'medium' => CreateChatCompletionRequestReasoningEffort.medium,
+    'high' => CreateChatCompletionRequestReasoningEffort.high,
+    _ => null,
+  };
+  if (mapped == null) {
+    return null;
+  }
+  return CreateChatCompletionRequestReasoning(effort: mapped);
+}
 
 /// Raw reasoning text from an OpenAI-compat stream delta (OpenRouter, DeepSeek, etc.).
 String? reasoningTextFromOpenAIStreamDelta(

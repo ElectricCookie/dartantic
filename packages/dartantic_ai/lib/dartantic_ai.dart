@@ -7,7 +7,9 @@ export 'package:dartantic_interface/dartantic_interface.dart';
 
 export 'src/agent/agent.dart';
 export 'src/agent/model_string_parser.dart';
+export 'src/chat_models/openai_chat/openai_chat_options.dart';
 export 'src/agent/orchestrators/orchestrators.dart';
+export 'src/agent/run_budget.dart';
 export 'src/agent/tool_middleware.dart';
 export 'src/chat_models/chat_models.dart';
 export 'src/embeddings_models/embeddings_models.dart';

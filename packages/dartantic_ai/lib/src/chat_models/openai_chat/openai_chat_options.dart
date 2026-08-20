@@ -23,6 +23,7 @@ class OpenAIChatOptions extends ChatModelOptions {
     this.streamOptions,
     this.logprobs,
     this.topLogprobs,
+    this.reasoningEffort,
   });
 
   /// Stream options for OpenAI chat completions.
@@ -145,6 +146,9 @@ class OpenAIChatOptions extends ChatModelOptions {
   /// An integer between 0 and 20 specifying the number of most likely tokens to
   /// return at each token position.
   final int? topLogprobs;
+
+  /// OpenRouter normalized reasoning effort (none, low, medium, high, …).
+  final String? reasoningEffort;
 }
 
 /// Specifies the latency tier to use for processing the request. This is

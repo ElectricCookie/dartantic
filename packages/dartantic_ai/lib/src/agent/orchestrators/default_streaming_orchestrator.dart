@@ -73,7 +73,9 @@ class DefaultStreamingOrchestrator implements StreamingOrchestrator {
     StreamingState state,
     ChatModel<ChatModelOptions> model, {
     JsonSchema? outputSchema,
-  }) async {}
+  }) async {
+    state.runBudget?.onIterationStart();
+  }
 
   /// Handles a single streaming chunk from the model response.
   @protected
@@ -81,6 +83,8 @@ class DefaultStreamingOrchestrator implements StreamingOrchestrator {
     ChatResult<ChatMessage> result,
     StreamingState state,
   ) async* {
+    state.runBudget?.onModelChunk();
+
     final textOutput = _extractText(result);
     final hasMetadata = result.metadata.isNotEmpty;
     final hasThinking = result.thinking != null && result.thinking!.isNotEmpty;
@@ -245,6 +249,7 @@ class DefaultStreamingOrchestrator implements StreamingOrchestrator {
     registerToolCalls(toolCalls, state);
     state.requestNextMessagePrefix();
 
+    state.runBudget?.onToolBatchStart();
     final executionResults = await executeToolBatch(state, toolCalls);
 
     final toolResultParts = executionResults
