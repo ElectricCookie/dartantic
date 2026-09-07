@@ -12,9 +12,4 @@ Map<String, String> buildLiveToolCallMetadata({
   required String id,
   required String name,
   required String args,
-}) =>
-    <String, String>{
-      'id': id,
-      'name': name,
-      'args': args,
-    };
+}) => <String, String>{'id': id, 'name': name, 'args': args};

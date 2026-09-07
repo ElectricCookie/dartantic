@@ -268,21 +268,20 @@ class OpenAIChatModel extends ChatModel<OpenAIChatOptions> {
     String id,
     String name,
     String args,
-  ) =>
-      ChatResult<ChatMessage>(
-        id: completion.id,
-        output: const ChatMessage(role: ChatMessageRole.model, parts: []),
-        messages: const [],
-        finishReason: FinishReason.unspecified,
-        metadata: {
-          kLiveToolCallMetadataKey: buildLiveToolCallMetadata(
-            id: id,
-            name: name,
-            args: args,
-          ),
-        },
-        usage: null,
-      );
+  ) => ChatResult<ChatMessage>(
+    id: completion.id,
+    output: const ChatMessage(role: ChatMessageRole.model, parts: []),
+    messages: const [],
+    finishReason: FinishReason.unspecified,
+    metadata: {
+      kLiveToolCallMetadataKey: buildLiveToolCallMetadata(
+        id: id,
+        name: name,
+        args: args,
+      ),
+    },
+    usage: null,
+  );
 
   @override
   void dispose() => _client.endSession();

@@ -1,14 +1,14 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dartantic_ai/dartantic_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:openai_dart/openai_dart.dart' as o;
 import 'package:test/test.dart';
 
 /// Builds an [OpenAIChatModel] whose SSE stream is served by [respondBody].
 OpenAIChatModel _modelWithStream(String respondBody) {
-  final mock = MockClient.streaming((request) async {
+  final mock = MockClient.streaming((request, bodyStream) async {
     final stream = Stream<Uint8List>.fromIterable([
       Uint8List.fromList(utf8.encode(respondBody)),
     ]);
@@ -47,7 +47,11 @@ String _toolCallSse({
           'created': 1,
           'model': 'gpt-4o-mini',
           'choices': [
-            {'index': 0, 'delta': {'role': 'assistant', 'content': ''}, 'finish_reason': null},
+            {
+              'index': 0,
+              'delta': {'role': 'assistant', 'content': ''},
+              'finish_reason': null,
+            },
           ],
         }),
       ),
@@ -64,7 +68,12 @@ String _toolCallSse({
             'index': 0,
             'delta': {
               'tool_calls': [
-                {'index': 0, 'id': callId, 'type': 'function', 'function': {'name': name, 'arguments': ''}},
+                {
+                  'index': 0,
+                  'id': callId,
+                  'type': 'function',
+                  'function': {'name': name, 'arguments': ''},
+                },
               ],
             },
             'finish_reason': null,
@@ -86,7 +95,10 @@ String _toolCallSse({
               'index': 0,
               'delta': {
                 'tool_calls': [
-                  {'index': 0, 'function': {'arguments': delta}},
+                  {
+                    'index': 0,
+                    'function': {'arguments': delta},
+                  },
                 ],
               },
               'finish_reason': null,
@@ -114,34 +126,37 @@ String _toolCallSse({
 
 void main() {
   group('OpenAI streaming live tool call metadata', () {
-    test('emits a live_tool_call metadata chunk when the tool name is seen', () async {
-      final model = _modelWithStream(_toolCallSse());
+    test(
+      'emits a live_tool_call metadata chunk when the tool name is seen',
+      () async {
+        final model = _modelWithStream(_toolCallSse());
 
-      final liveUpdates = <Map<String, String>>[];
-      await for (final result in model.sendStream(
-        [o.ChatMessage(role: o.MessageRole.user, content: 'search net')],
-      )) {
-        final live = result.metadata[kLiveToolCallMetadataKey];
-        if (live is Map) {
-          liveUpdates.add(
-            live.map((k, v) => MapEntry(k as String, v as String)),
-          );
+        final liveUpdates = <Map<String, String>>[];
+        await for (final result in model.sendStream([
+          ChatMessage.user('search net'),
+        ])) {
+          final live = result.metadata[kLiveToolCallMetadataKey];
+          if (live is Map) {
+            liveUpdates.add(
+              live.map((k, v) => MapEntry(k as String, v as String)),
+            );
+          }
         }
-      }
 
-      expect(liveUpdates, isNotEmpty);
-      final first = liveUpdates.first;
-      expect(first['id'], 'call_1');
-      expect(first['name'], 'search');
-    });
+        expect(liveUpdates, isNotEmpty);
+        final first = liveUpdates.first;
+        expect(first['id'], 'call_1');
+        expect(first['name'], 'search');
+      },
+    );
 
     test('grows the live args preview across delta chunks', () async {
       final model = _modelWithStream(_toolCallSse());
 
       final liveUpdates = <Map<String, String>>[];
-      await for (final result in model.sendStream(
-        [o.ChatMessage(role: o.MessageRole.user, content: 'search net')],
-      )) {
+      await for (final result in model.sendStream([
+        ChatMessage.user('search net'),
+      ])) {
         final live = result.metadata[kLiveToolCallMetadataKey];
         if (live is Map) {
           liveUpdates.add(
@@ -160,9 +175,9 @@ void main() {
       final model = _modelWithStream(_toolCallSse());
 
       final toolCallParts = <ToolPart>[];
-      await for (final result in model.sendStream(
-        [o.ChatMessage(role: o.MessageRole.user, content: 'search net')],
-      )) {
+      await for (final result in model.sendStream([
+        ChatMessage.user('search net'),
+      ])) {
         for (final message in result.messages) {
           toolCallParts.addAll(
             message.parts.whereType<ToolPart>().where(
