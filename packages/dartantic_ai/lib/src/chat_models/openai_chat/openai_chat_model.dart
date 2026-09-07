@@ -5,6 +5,7 @@ import 'package:logging/logging.dart';
 import 'package:openai_dart/openai_dart.dart';
 
 import '../../retry_http_client.dart';
+import '../../shared/live_tool_call.dart';
 import 'openai_audio_format.dart';
 import 'openai_chat_options.dart';
 import 'openai_message_mappers.dart';
@@ -150,10 +151,44 @@ class OpenAIChatModel extends ChatModel<OpenAIChatOptions> {
 
         // Get the message with any text content (tool calls are only
         // accumulated)
+        final toolCallsBefore = accumulatedToolCalls.length;
+        final argsBefore = accumulatedToolCalls.isEmpty
+            ? 0
+            : accumulatedToolCalls.last.argumentsJson.length;
         final message = messageFromOpenAIStreamDelta(
           delta,
           accumulatedToolCalls,
         );
+
+        // Surface in-progress tool calls as soon as their id/name is known
+        // (OpenRouter / OpenAI chat completions stream the tool name in the
+        // first delta of a call, then drip the JSON args). Emit a metadata-only
+        // chunk for the new call, then again on each args continuation so
+        // consumers can render a live "agent is calling tool X" row with a
+        // growing preview instead of waiting for the full call to complete.
+        if (delta.toolCalls != null && delta.toolCalls!.isNotEmpty) {
+          if (accumulatedToolCalls.length > toolCallsBefore) {
+            for (final newCall in accumulatedToolCalls.sublist(
+              toolCallsBefore,
+            )) {
+              yield _liveToolCallResult(
+                completion,
+                newCall.id,
+                newCall.name,
+                newCall.argumentsJson,
+              );
+            }
+          } else if (accumulatedToolCalls.isNotEmpty &&
+              accumulatedToolCalls.last.argumentsJson.length > argsBefore) {
+            final lastCall = accumulatedToolCalls.last;
+            yield _liveToolCallResult(
+              completion,
+              lastCall.id,
+              lastCall.name,
+              lastCall.argumentsJson,
+            );
+          }
+        }
 
         // Store the latest completion info for the final result
         lastResult = ChatResult<ChatMessage>(
@@ -224,6 +259,30 @@ class OpenAIChatModel extends ChatModel<OpenAIChatOptions> {
       rethrow;
     }
   }
+
+  /// Builds a metadata-only result that carries the current (partial) state
+  /// of a streaming tool call. `args` is the raw JSON accumulated so far; it
+  /// may be empty or incomplete while the provider is still generating it.
+  ChatResult<ChatMessage> _liveToolCallResult(
+    CreateChatCompletionStreamResponse completion,
+    String id,
+    String name,
+    String args,
+  ) =>
+      ChatResult<ChatMessage>(
+        id: completion.id,
+        output: const ChatMessage(role: ChatMessageRole.model, parts: []),
+        messages: const [],
+        finishReason: FinishReason.unspecified,
+        metadata: {
+          kLiveToolCallMetadataKey: buildLiveToolCallMetadata(
+            id: id,
+            name: name,
+            args: args,
+          ),
+        },
+        usage: null,
+      );
 
   @override
   void dispose() => _client.endSession();
